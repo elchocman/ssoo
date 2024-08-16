@@ -158,27 +158,15 @@ void lrexec(char **args) {
             exit(EXIT_FAILURE);
         }
     } else {  // Proceso padre
-        if (process_count < MAX_PROCESSES) {
-            ProcessInfo *proc = &process_list[process_count++];
-            proc->pid = pid;
-            strncpy(proc->executable, args[1], 255);
-            proc->start_time = time(NULL);
-            proc->exit_code = -1;
-        }
-
         int status;
-        if (waitpid(pid, &status, WNOHANG) == -1) {
-            perror("waitpid");
-        } else if (WIFEXITED(status)) {
-            for (int i = 0; i < process_count; i++) {
-                if (process_list[i].pid == pid) {
-                    process_list[i].exit_code = WEXITSTATUS(status);
-                    break;
-                }
-            }
-        }
+        // Esperar a que el proceso hijo termine
+        waitpid(pid, &status, 0);
+
+        // Después de que el hijo termine, el shell debería seguir ejecutándose
+        printf("El proceso hijo %d ha terminado.\n", pid);
     }
 }
+
 
 /*
  * Command: lrlist
