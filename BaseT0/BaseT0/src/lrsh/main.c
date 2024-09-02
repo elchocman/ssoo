@@ -5,6 +5,17 @@
 #include <stdbool.h>
 
 
+// chmod +x ./my_program
+// chmod +x ./lrsh
+
+// ./lrsh
+
+// lrexec ./my_program arg1 arg2 arg3
+
+
+void lrlist();
+
+
 void isprime(char *num) {
     int number = atoi(num);
     if (is_prime(number)) {

@@ -1,12 +1,14 @@
-// Tells the compiler to compile this file once
 #pragma once
 
-// Define compile-time constants
+// Definir las constantes que se van a utilizar
+// Se definen las constantes MAX_SPLIT y BUFFER_SIZE
+// MAX_SPLIT se utiliza para definir el tamaño máximo de la lista de argumentos
+// BUFFER_SIZE se utiliza para definir el tamaño máximo de la entrada del usuario
 #define MAX_SPLIT 255
 #define BUFFER_SIZE 4096
 #include <stdbool.h>
 
-// Declare functions
+// Declarar las funciones que se van a utilizar
 char **read_user_input();
 void free_user_input(char **input);
 void hello();

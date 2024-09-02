@@ -1,16 +1,22 @@
-// Import used global libraries
-#include <stdio.h>  // FILE, fopen, fclose, etc.
-#include <string.h> // strtok, strcpy, etc.
-#include <stdlib.h> // malloc, calloc, free, etc.
-#include <unistd.h>   // Para fork()
-#include <sys/wait.h> // Para wait()
+#include <stdio.h> 
+#include <string.h> 
+#include <stdlib.h> 
+#include <unistd.h>   
+#include <sys/wait.h> 
 #include <stdbool.h>
 #include <math.h>
 #include <sys/types.h>
 #include <time.h>
+#include <signal.h>
 
-// Import the header file of this module, because it has the constant definitions
+// Acá se incluye el archivo manager.h
 #include "manager.h"
+
+
+//Bibliofía importante
+// https://linux.die.net/man/3/fork
+// https://linux.die.net/man/3/exec
+// https://linux.die.net/man/3/wait
 
 // Estructura para almacenar la información de los procesos
 typedef struct {
@@ -26,10 +32,7 @@ typedef struct {
 ProcessInfo process_list[MAX_PROCESSES];
 int process_count = 0;
 
-/*
- * Splits a string "str" by a separator "sep", returns an array with the
- * resulting strings. Equivalent to Python's str.split(sep).
- */
+
 static char **split_by_sep(char *str, char *sep)
 {
   char **new_str = calloc(MAX_SPLIT, sizeof(char *));
@@ -42,8 +45,6 @@ static char **split_by_sep(char *str, char *sep)
     strcpy(new_str[index++], token);
     token = strtok(NULL, sep);
   }
-
-  // Remove dangling Windows (\r) and Unix (\n) newlines
   len = strlen(new_str[index - 1]);
   if (len > 1 && new_str[index - 1][len - 2] == '\r')
     new_str[index - 1][len - 2] = '\0';
@@ -52,9 +53,8 @@ static char **split_by_sep(char *str, char *sep)
   return new_str;
 }
 
-/*
- * Reads a line fo user input and returns it as an array of strings
- */
+// Función para leer la entrada del usuario
+
 char **read_user_input()
 {
   char *input = calloc(BUFFER_SIZE, sizeof(char));
@@ -64,9 +64,7 @@ char **read_user_input()
   return split_input;
 }
 
-/*
- * Frees user input obtained by the read_user_input function
- */
+// Función para liberar la memoria de la entrada del usuario
 void free_user_input(char **input)
 {
   for (int i = 0; i < MAX_SPLIT; i++)
@@ -76,10 +74,7 @@ void free_user_input(char **input)
   free(input);
 }
 
-/*
- * Command: hello
- * Prints "Hello World!" from a child process.
- */
+// Función para imprimir "Hello World!"
 void hello() {
     pid_t pid = fork();
     if (pid == 0) {
@@ -95,34 +90,30 @@ void hello() {
     }
 }
 
-/*
- * Command: sum
- * Takes two numbers as arguments, sums them, and prints the result from a child process.
- */
+// Función para sumar dos números
+
 void sum(char *num1_str, char *num2_str) {
     int num1 = atoi(num1_str);
     int num2 = atoi(num2_str);
 
     pid_t pid = fork();
     if (pid == 0) {
-        // Child process
+        // Proceso hijo
         printf("Resultado: %d\n", num1 + num2);
         exit(0);
     } else if (pid > 0) {
-        // Parent process waits for the child to finish
+        // Proceso padre espera a que el hijo termine
         wait(NULL);
     } else {
-        // Error in fork
+        // Error en fork
         perror("Error al crear el proceso hijo");
     }
 }
 
-/*
- * Command: is_prime
- */
+// Función para verificar si un número es primo
 bool is_prime(int num) {
-    if (num <= 1) return false;  // Los números menores o iguales a 1 no son primos
-    if (num == 2 || num == 3) return true;  // 2 y 3 son primos
+    if (num <= 1) return false;  
+    if (num == 2 || num == 3) return true;  
 
     // Si es divisible por 2 o 3, no es primo
     if (num % 2 == 0 || num % 3 == 0) return false;
@@ -135,10 +126,7 @@ bool is_prime(int num) {
     return true;
 }
 
-/*
- * Command: lrexec
- * Executes an external program with the provided arguments.
- */
+// Función para ejecutar un programa
 void lrexec(char **args) {
     if (args[1] == NULL) {
         fprintf(stderr, "Uso: lrexec <executable> <arg1> <arg2> ... <argn>\n");
@@ -158,20 +146,29 @@ void lrexec(char **args) {
             exit(EXIT_FAILURE);
         }
     } else {  // Proceso padre
-        int status;
-        // Esperar a que el proceso hijo termine
-        waitpid(pid, &status, 0);
+        if (process_count < MAX_PROCESSES) {
+            ProcessInfo *proc = &process_list[process_count++];
+            proc->pid = pid;
+            strncpy(proc->executable, args[1], 255);
+            proc->start_time = time(NULL);
+            proc->exit_code = -1;
+        }
 
-        // Después de que el hijo termine, el shell debería seguir ejecutándose
-        printf("El proceso hijo %d ha terminado.\n", pid);
+        int status;
+        if (waitpid(pid, &status, WNOHANG) == -1) {
+            perror("waitpid");
+        } else if (WIFEXITED(status)) {
+            for (int i = 0; i < process_count; i++) {
+                if (process_list[i].pid == pid) {
+                    process_list[i].exit_code = WEXITSTATUS(status);
+                    break;
+                }
+            }
+        }
     }
 }
 
-
-/*
- * Command: lrlist
- * Lists all processes started by the shell that are still running.
- */
+// Función para listar los procesos en ejecución
 void lrlist() {
     printf("Lista de procesos:\n");
     printf("PID\tEjecutable\tTiempo de Ejecución (s)\tExit Code\n");
@@ -186,10 +183,7 @@ void lrlist() {
     }
 }
 
-/*
- * Command: lrexit
- * Exits the shell and terminates all child processes.
- */
+// Función para terminar el shell
 void lrexit() {
     printf("Saliendo de lrsh...\n");
 
