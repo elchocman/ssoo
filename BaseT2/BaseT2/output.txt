@@ -1,0 +1,3 @@
+nombre_proceso,pid,interrupciones,turnaround,response,waiting,suma_deadline
+A,1,1,6,0,2,3
+B,2,2,11,0,2,9

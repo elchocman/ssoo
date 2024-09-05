@@ -1,0 +1,3 @@
+gdb ./lrscheduler
+run input.txt output.txt 5
+backtrace
