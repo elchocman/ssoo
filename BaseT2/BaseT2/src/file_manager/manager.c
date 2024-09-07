@@ -1,48 +1,38 @@
+#include "manager.h"
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
-#include "manager.h"
 #include "../process/process.h"
 
-// Función para leer el archivo de entrada y crear procesos
-InputFile* read_file(const char *file_name) {
-    FILE *file = fopen(file_name, "r");
+// Leer el archivo de entrada y cargar los procesos
+InputFile* read_file(const char* filename) {
+    FILE* file = fopen(filename, "r");
     if (!file) {
-        printf("Error al abrir el archivo: %s\n", file_name);
+        printf("Error al abrir el archivo %s\n", filename);
         return NULL;
     }
 
-    // Leer la cantidad de procesos
+    InputFile* input_file = (InputFile*)malloc(sizeof(InputFile));
     int process_count;
-    fscanf(file, "%d", &process_count);
+    fscanf(file, "%d\n", &process_count);
+    input_file->lines = (char**)malloc(process_count * sizeof(char*));  // Cambiado a char**
 
-    // Crear la estructura InputFile para almacenar los procesos
-    InputFile *input_file = (InputFile *)malloc(sizeof(InputFile));
-    input_file->len = process_count;
-    input_file->lines = (Process **)malloc(process_count * sizeof(Process *));
-
-    // Leer cada línea del archivo de entrada y crear procesos
-    for (int i = 0; i < process_count; i++) {
-        char name[256];
-        int pid, arrival_time, burst_time, bursts, io_wait, deadline;
-
-        fscanf(file, "%s %d %d %d %d %d %d", name, &pid, &arrival_time, &burst_time, &bursts, &io_wait, &deadline);
-
-        // Llamada a create_process incluyendo arrival_time
-        Process* process = create_process(name, pid, arrival_time, burst_time, bursts, io_wait, deadline);
-        input_file->lines[i] = process;
+    char buffer[256];
+    for (int i = 0; i < process_count; ++i) {
+        fgets(buffer, sizeof(buffer), file);
+        input_file->lines[i] = strdup(buffer);  // Copiar cada línea
     }
 
+    input_file->len = process_count;
     fclose(file);
     return input_file;
 }
 
-// Función para destruir el InputFile y liberar memoria
+// Destruir el archivo de entrada
 void input_file_destroy(InputFile* input_file) {
-
-    // Free the lines array (which holds pointers to processes)
+    for (int i = 0; i < input_file->len; ++i) {
+        free(input_file->lines[i]);
+    }
     free(input_file->lines);
-
-    // Free the input_file itself
     free(input_file);
 }
