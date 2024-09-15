@@ -65,41 +65,21 @@ void run_next_process(Scheduler* scheduler, int quantum) {
         }
 
         // Determine how long the process will execute in this round
-        int time_to_run = (process->burst_time < quantum) ? process->burst_time : quantum;
+        int run_time = (process->burst_time < quantum) ? process->burst_time : quantum;
+        printf("[INFO] Executing process: %s (PID: %d), Clock: %d, Running for: %d, Quantum: %d\n", 
+               process->name, process->pid, scheduler->clock, run_time, quantum);
         
         // Simulate process execution
-        printf("[INFO] Executing process: %s (PID: %d), Clock: %d, Running for: %d, Quantum: %d, Burst Remaining Before Execution: %d\n", 
-               process->name, process->pid, scheduler->clock, time_to_run, quantum, process->burst_time);
+        process->burst_time -= run_time;
+        scheduler->clock += run_time;
 
-        // Update the system clock
-        scheduler->clock += time_to_run;
-
-        // Decrease the burst time by the time_to_run
-        process->burst_time -= time_to_run;
-
-        // Debugging the clock and burst time
+        // Debugging the clock
         printf("[DEBUG] The scheduler clock is now: %d\n", scheduler->clock);
-        printf("[DEBUG] Process %s (PID: %d) has %d burst_time remaining after execution.\n", 
-               process->name, process->pid, process->burst_time);
 
-        // If the process still has burst time left after the quantum
-        if (process->burst_time > 0) {
-            // The process was interrupted by the quantum
-            process->interruptions++;
-            printf("[DEBUG] Process %s: Interrupted, Interruptions = %d\n", process->name, process->interruptions);
-
-            // Re-enqueue the process according to its priority
-            if (is_from_high) {
-                enqueue(scheduler->high_priority_queue, process);
-            } else {
-                enqueue(scheduler->low_priority_queue, process);
-            }
-        } else {
-            // If the current burst is completed
+        // If the current burst is completed
+        if (process->burst_time == 0) {
             process->bursts--;  // Reduce the number of remaining bursts
-
-            printf("[DEBUG] Process %s (PID: %d) completed a burst. Bursts remaining: %d\n", 
-                   process->name, process->pid, process->bursts);
+            printf("[DEBUG] Process %s (PID: %d) completed a burst. Bursts remaining: %d\n", process->name, process->pid, process->bursts);
 
             if (process->bursts > 0) {
                 // Simulate I/O wait time between bursts
@@ -108,8 +88,7 @@ void run_next_process(Scheduler* scheduler, int quantum) {
 
                 // Reset burst time for the next burst
                 process->burst_time = process->original_burst_time;
-                printf("[DEBUG] Process %s (PID: %d) next burst time reset to: %d\n", 
-                       process->name, process->pid, process->burst_time);
+                printf("[DEBUG] Process %s (PID: %d) next burst time reset to: %d\n", process->name, process->pid, process->burst_time);
 
                 // Re-enqueue the process according to its priority
                 if (is_from_high) {
@@ -128,8 +107,8 @@ void run_next_process(Scheduler* scheduler, int quantum) {
                 printf("[DEBUG] Process %s Turnaround time: %d\n", process->name, process->turnaround_time);
 
                 // Calculate waiting time
-                int execution_time = process->original_burst_time * process->total_bursts;
-                process->wait_time = process->turnaround_time - execution_time;
+                int total_burst_time = process->original_burst_time * process->total_bursts;
+                process->wait_time = process->turnaround_time - total_burst_time;
 
                 // Ensure waiting time is not negative
                 if (process->wait_time < 0) {
@@ -137,20 +116,27 @@ void run_next_process(Scheduler* scheduler, int quantum) {
                 }
                 printf("[DEBUG] Process %s Waiting time: %d\n", process->name, process->wait_time);
 
-                // Calculate deadline penalty
-                process->deadline_penalty = (process->finish_time > process->deadline) 
-                                            ? (process->finish_time - process->deadline) 
-                                            : 0;
+                // Correct deadline penalty
+                process->deadline_penalty = (process->finish_time > process->deadline) ? (process->finish_time - process->deadline) : 0;
                 printf("[DEBUG] Process %s Deadline Penalty: %d\n", process->name, process->deadline_penalty);
 
                 printf("Process %s: Finished, Turnaround = %d, Response = %d, Waiting = %d, Deadline Penalty = %d\n",
                        process->name, process->turnaround_time, process->response_time, process->wait_time, process->deadline_penalty);
             }
+        } else {
+            // The process was interrupted by the quantum
+            process->interruptions++;
+            printf("[DEBUG] Process %s: Interrupted, Interruptions = %d\n", process->name, process->interruptions);
+
+            // Re-enqueue the process according to its priority
+            if (is_from_high) {
+                enqueue(scheduler->high_priority_queue, process);
+            } else {
+                enqueue(scheduler->low_priority_queue, process);
+            }
         }
     }
 }
-
-
 
 // Function to simulate the scheduler
 void schedule(Scheduler* scheduler, int quantum, Process **processes, int process_count) {
