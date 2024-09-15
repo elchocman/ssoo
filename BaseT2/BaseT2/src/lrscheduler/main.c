@@ -68,8 +68,8 @@ void run_next_process(Scheduler* scheduler, int quantum) {
         int time_to_run = (process->burst_time > quantum) ? quantum : process->burst_time;
         
         // Simulate process execution
-        printf("Executing process: %s (PID: %d), Clock: %d, Running for: %d\n", 
-               process->name, process->pid, scheduler->clock, time_to_run);
+        printf("[INFO] Executing process: %s (PID: %d), Clock: %d, Running for: %d, Quantum: %d, Burst Remaining Before Execution: %d\n", 
+               process->name, process->pid, scheduler->clock, time_to_run, quantum, process->burst_time);
 
         // Update the system clock
         scheduler->clock += time_to_run;
@@ -98,6 +98,9 @@ void run_next_process(Scheduler* scheduler, int quantum) {
             // If the current burst is completed
             process->bursts--;  // Reduce the number of remaining bursts
 
+            printf("[DEBUG] Process %s (PID: %d) completed a burst. Bursts remaining: %d\n", 
+                   process->name, process->pid, process->bursts);
+
             if (process->bursts > 0) {
                 // Simulate I/O wait time between bursts
                 scheduler->clock += process->io_wait;
@@ -105,6 +108,8 @@ void run_next_process(Scheduler* scheduler, int quantum) {
 
                 // Reset burst time for the next burst
                 process->burst_time = process->original_burst_time;
+                printf("[DEBUG] Process %s (PID: %d) next burst time reset to: %d\n", 
+                       process->name, process->pid, process->burst_time);
 
                 // Re-enqueue the process according to its priority
                 if (is_from_high) {
@@ -144,8 +149,6 @@ void run_next_process(Scheduler* scheduler, int quantum) {
         }
     }
 }
-
-
 
 
 // Function to simulate the scheduler
