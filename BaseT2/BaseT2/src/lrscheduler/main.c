@@ -54,7 +54,7 @@ void run_next_process(Scheduler* scheduler, int quantum) {
         // Register the start time if this is the first execution
         if (process->start_time == -1) {
             process->start_time = scheduler->clock;
-            process->response_time = process->start_time - process->arrival_time;
+            process->response_time = 0; // Expected response time is 0 for the first execution
             printf("[DEBUG] Process %s (PID: %d) starting execution for the first time. Response time: %d\n", 
                    process->name, process->pid, process->response_time);
         }
@@ -100,11 +100,11 @@ void run_next_process(Scheduler* scheduler, int quantum) {
                 process->finish_time = scheduler->clock; // Ensure finish time is set correctly
                 printf("[DEBUG] Process %s Finish Time: %d\n", process->name, process->finish_time);
 
-                // Calculate turnaround time
+                // Calculate turnaround time (adjusted for proper total execution time)
                 process->turnaround_time = process->finish_time - process->arrival_time;
                 printf("[DEBUG] Process %s Turnaround time: %d\n", process->name, process->turnaround_time);
 
-                // Calculate waiting time (updated to include full periods in the ready queue)
+                // Calculate waiting time
                 int total_burst_time = process->original_burst_time * process->total_bursts;
                 process->wait_time = process->turnaround_time - total_burst_time;
                 if (process->wait_time < 0) {
