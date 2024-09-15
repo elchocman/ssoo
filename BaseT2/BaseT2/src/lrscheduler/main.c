@@ -65,7 +65,7 @@ void run_next_process(Scheduler* scheduler, int quantum) {
         }
 
         // Determine how long the process will execute in this round
-        int time_to_run = (process->burst_time > quantum) ? quantum : process->burst_time;
+        int time_to_run = (process->burst_time < quantum) ? process->burst_time : quantum;
         
         // Simulate process execution
         printf("[INFO] Executing process: %s (PID: %d), Clock: %d, Running for: %d, Quantum: %d, Burst Remaining Before Execution: %d\n", 
@@ -82,7 +82,7 @@ void run_next_process(Scheduler* scheduler, int quantum) {
         printf("[DEBUG] Process %s (PID: %d) has %d burst_time remaining after execution.\n", 
                process->name, process->pid, process->burst_time);
 
-        // If the process still has burst time left
+        // If the process still has burst time left after the quantum
         if (process->burst_time > 0) {
             // The process was interrupted by the quantum
             process->interruptions++;
@@ -149,6 +149,7 @@ void run_next_process(Scheduler* scheduler, int quantum) {
         }
     }
 }
+
 
 
 // Function to simulate the scheduler
