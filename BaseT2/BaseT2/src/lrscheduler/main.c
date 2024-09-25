@@ -4,129 +4,126 @@
 #include "../queue/queue.h"
 #include "../file_manager/manager.h"
 
-// Define the scheduler structure
+// Definir la estructura del scheduler
 typedef struct {
     Queue *high_priority_queue;
     Queue *low_priority_queue;
-    int clock;  // System clock
+    int clock;  // Reloj del sistema
 } Scheduler;
 
-// Function Declarations
-Scheduler* create_scheduler(int high_priority_capacity, int low_priority_capacity);
-void destroy_scheduler(Scheduler* scheduler);
-void run_next_process(Scheduler* scheduler, int quantum);
-void schedule(Scheduler* scheduler, int quantum, Process **processes, int process_count);
-void write_output(char *output_file, Process **processes, int process_count);
-
-// Create a scheduler with high and low priority queues
+// Crear un scheduler con colas de alta y baja prioridad
 Scheduler* create_scheduler(int high_priority_capacity, int low_priority_capacity) {
     Scheduler* scheduler = (Scheduler*)malloc(sizeof(Scheduler));
-    scheduler->high_priority_queue = create_queue(high_priority_capacity); // High-priority queue
-    scheduler->low_priority_queue = create_queue(low_priority_capacity);   // Low-priority queue
-    scheduler->clock = 0;  // Initialize the system clock
+    scheduler->high_priority_queue = create_queue(high_priority_capacity); // Cola de alta prioridad
+    scheduler->low_priority_queue = create_queue(low_priority_capacity);   // Cola de baja prioridad
+    scheduler->clock = 0;  // Iniciar el reloj del sistema
     return scheduler;
 }
 
-// Destroy the scheduler and its queues
+// Destruir el scheduler y sus colas
 void destroy_scheduler(Scheduler* scheduler) {
     destroy_queue(scheduler->high_priority_queue);
     destroy_queue(scheduler->low_priority_queue);
     free(scheduler);
 }
 
+// Función para ejecutar el próximo proceso
 void run_next_process(Scheduler* scheduler, int quantum) {
     Process *process = NULL;
     int is_from_high = 0;
 
-    // Check high-priority queue first
+    // Verificar primero la cola de alta prioridad
     if (!is_empty(scheduler->high_priority_queue)) {
         process = dequeue(scheduler->high_priority_queue);
         is_from_high = 1;
-        printf("[DEBUG] Process %s (PID: %d) dequeued from high priority queue\n", process->name, process->pid);
+        printf("[DEBUG] Proceso %s (PID: %d) sacado de la cola de alta prioridad\n", process->name, process->pid);
     }
-    // If high-priority queue is empty, check low-priority queue
+    // Si la cola de alta prioridad está vacía, verificamos la de baja prioridad
     else if (!is_empty(scheduler->low_priority_queue)) {
         process = dequeue(scheduler->low_priority_queue);
-        printf("[DEBUG] Process %s (PID: %d) dequeued from low priority queue\n", process->name, process->pid);
+        printf("[DEBUG] Proceso %s (PID: %d) sacado de la cola de baja prioridad\n", process->name, process->pid);
     }
 
     if (process != NULL) {
-        // Register the start time if this is the first execution
+        // Registrar el tiempo de inicio si es la primera vez que se ejecuta
         if (process->start_time == -1) {
             process->start_time = scheduler->clock;
-            process->response_time = 0; // Expected response time is 0 for the first execution
-            printf("[DEBUG] Process %s (PID: %d) starting execution for the first time. Response time: %d\n", 
+            process->response_time = process->start_time - process->arrival_time;
+
+            // Asegurarse de que el tiempo de respuesta no sea negativo
+            if (process->response_time < 0) {
+                process->response_time = 0;
+            }
+            printf("[DEBUG] Proceso %s (PID: %d) comenzando a ejecutarse por primera vez. Response time: %d\n", 
                    process->name, process->pid, process->response_time);
         }
 
-        // Determine how long the process will execute in this round
-        int execution_time = (process->burst_time > quantum) ? quantum : process->burst_time;
-        process->burst_time -= execution_time;  // Reduce remaining burst time
+        // Definir cuánto tiempo ejecutará el proceso en esta ronda
+        int remaining_burst_time = (process->burst_time > quantum) ? quantum : process->burst_time;
+        process->burst_time -= remaining_burst_time;  // Reducir el burst_time restante
 
-        printf("[INFO] Executing process: %s (PID: %d), Clock: %d, Running for: %d, Quantum: %d\n", 
-               process->name, process->pid, scheduler->clock, execution_time, quantum);
+        printf("[DEBUG] Proceso %s (PID: %d) tiene %d burst_time restante antes de ejecutar.\n", 
+               process->name, process->pid, process->burst_time);
 
-        // Update the system clock
-        scheduler->clock += execution_time;
+        // Simular la ejecución del proceso
+        printf("Ejecutando proceso: %s (PID: %d), Clock: %d, Burst time restante: %d, Quantum: %d\n", 
+               process->name, process->pid, scheduler->clock, process->burst_time, quantum);
 
-        // If the current burst is completed
+        // Actualizar el reloj del sistema
+        scheduler->clock += remaining_burst_time;
+
+        // Depuración del reloj
+        printf("[DEBUG] El clock del scheduler ahora es: %d\n", scheduler->clock);
+
+        // Si el burst actual se completó
         if (process->burst_time == 0) {
-            process->bursts--;  // Reduce the number of remaining bursts
-            printf("[DEBUG] Process %s (PID: %d) completed a burst. Bursts remaining: %d\n", process->name, process->pid, process->bursts);
+            process->bursts--;  // Reducir el número de ráfagas restantes
 
             if (process->bursts > 0) {
-                // Simulate I/O wait time between bursts
+                // Simular tiempo de espera por I/O entre ráfagas
                 scheduler->clock += process->io_wait;
-                printf("[DEBUG] Process %s waiting for I/O, Clock now: %d\n", process->name, scheduler->clock);
+                printf("[DEBUG] Proceso %s esperando I/O, Clock ahora: %d\n", process->name, scheduler->clock);
 
-                // Reset burst time for the next burst
-                process->burst_time = process->original_burst_time;
-                printf("[DEBUG] Process %s (PID: %d) next burst time reset to: %d\n", process->name, process->pid, process->burst_time);
-
-                // Re-enqueue the process according to its priority
+                // Volver a encolar el proceso según su prioridad
                 if (is_from_high) {
                     enqueue(scheduler->high_priority_queue, process);
                 } else {
                     enqueue(scheduler->low_priority_queue, process);
                 }
-
-                // Increment interruptions only for process B when it returns to the queue after I/O
-                if (process->pid == 2) {
-                    process->interruptions++;
-                    printf("[DEBUG] Process %s: Interrupted for I/O, Interruptions = %d\n", process->name, process->interruptions);
-                }
             } else {
-                // The process has finished all bursts
-                process->finish_time = scheduler->clock; // Ensure finish time is set correctly
-                printf("[DEBUG] Process %s Finish Time: %d\n", process->name, process->finish_time);
+                // El proceso ha terminado
+                process->finish_time = scheduler->clock;
 
-                // Calculate turnaround time (adjusted for proper total execution time)
+                // Calcular turnaround time
                 process->turnaround_time = process->finish_time - process->arrival_time;
-                printf("[DEBUG] Process %s Turnaround time: %d\n", process->name, process->turnaround_time);
+                printf("[DEBUG] Proceso %s Turnaround time: %d\n", process->name, process->turnaround_time);
 
-                // Calculate waiting time
-                int total_burst_time = process->original_burst_time * process->total_bursts;
-                process->wait_time = process->turnaround_time - total_burst_time;
+                // Calcular waiting time
+                int execution_time = process->original_burst_time * process->total_bursts;
+                process->wait_time = process->turnaround_time - execution_time;
+
+                // Asegurarse de que el tiempo de espera no sea negativo
                 if (process->wait_time < 0) {
-                    process->wait_time = 0; // Ensure wait time is not negative
+                    process->wait_time = 0;
                 }
-                printf("[DEBUG] Process %s Waiting time: %d\n", process->name, process->wait_time);
+                printf("[DEBUG] Proceso %s Waiting time: %d\n", process->name, process->wait_time);
 
-                // Calculate deadline penalty
+                // Calcular penalización por no cumplir el deadline
                 process->deadline_penalty = (process->finish_time > process->deadline) 
                                             ? (process->finish_time - process->deadline) 
                                             : 0;
-                printf("[DEBUG] Process %s Deadline Penalty: %d\n", process->name, process->deadline_penalty);
 
-                printf("Process %s: Finished, Turnaround = %d, Response = %d, Waiting = %d, Deadline Penalty = %d\n",
+                printf("[DEBUG] Proceso %s Deadline Penalty: %d\n", process->name, process->deadline_penalty);
+
+                printf("Proceso %s: Terminado, Turnaround = %d, Response = %d, Waiting = %d, Deadline Penalty = %d\n",
                        process->name, process->turnaround_time, process->response_time, process->wait_time, process->deadline_penalty);
             }
         } else {
-            // The process was interrupted by the quantum
+            // El proceso fue interrumpido por el quantum
             process->interruptions++;
-            printf("[DEBUG] Process %s: Interrupted by quantum, Interruptions = %d\n", process->name, process->interruptions);
+            printf("[DEBUG] Proceso %s: Interrumpido, interrupciones = %d\n", process->name, process->interruptions);
 
-            // Re-enqueue the process according to its priority
+            // Volver a encolar el proceso según su prioridad
             if (is_from_high) {
                 enqueue(scheduler->high_priority_queue, process);
             } else {
@@ -137,30 +134,31 @@ void run_next_process(Scheduler* scheduler, int quantum) {
 }
 
 
-
-
-// Function to simulate the scheduler
+// Simular la ejecución del scheduler
 void schedule(Scheduler* scheduler, int quantum, Process **processes, int process_count) {
-    printf("Starting the scheduler simulation\n");
+    printf("Iniciando la simulación del scheduler\n");
 
     int all_processes_finished = 0;
     while (!all_processes_finished) {
-        printf("[INFO] Starting scheduler cycle, Clock: %d\n", scheduler->clock);
-
-        // Enqueue processes that have arrived
+        printf("[INFO] Iniciando ciclo del scheduler, Clock: %d\n", scheduler->clock);
+        // Encolar procesos que han llegado
         for (int i = 0; i < process_count; ++i) {
-            Process *process = processes[i];
-            if (!process->enqueued && process->arrival_time <= scheduler->clock) {
-                process->enqueued = 1; // Ensure the process is not enqueued twice
-                enqueue(scheduler->high_priority_queue, process);  // Enqueue in high priority by default
-                printf("[INFO] Process %s has arrived and is enqueued in high priority. Clock: %d\n", process->name, scheduler->clock);
+        Process *process = processes[i];
+        if (!process->enqueued && process->arrival_time <= scheduler->clock) {
+            process->enqueued = 1; // Asegurar que el proceso no se encole dos veces
+            enqueue(scheduler->high_priority_queue, process);  // Encolar en alta prioridad por defecto
+            if (enqueue(scheduler->high_priority_queue, process) == -1) {
+                printf("Error: La cola está llena, no se puede agregar más procesos.\n");
+            } else {
+                printf("[INFO] Proceso %s ha llegado y se encola en alta prioridad. Clock: %d\n", process->name, scheduler->clock);
             }
         }
+    }
 
-        // Execute the next process
+        // Ejecutar el siguiente proceso
         run_next_process(scheduler, quantum);
 
-        // Check if all processes have finished
+        // Verificar si todos los procesos han terminado
         all_processes_finished = 1;
         for (int i = 0; i < process_count; ++i) {
             if (processes[i]->finish_time == 0) {
@@ -169,7 +167,7 @@ void schedule(Scheduler* scheduler, int quantum, Process **processes, int proces
             }
         }
 
-        // If there are no processes in the queues and some are yet to arrive, advance the clock
+        // Si no hay procesos en las colas y aún hay procesos por llegar, avanzar el clock
         if (is_empty(scheduler->high_priority_queue) && is_empty(scheduler->low_priority_queue)) {
             int next_arrival_time = -1;
             for (int i = 0; i < process_count; ++i) {
@@ -183,22 +181,21 @@ void schedule(Scheduler* scheduler, int quantum, Process **processes, int proces
                 scheduler->clock = next_arrival_time;
             }
         }
-        printf("[INFO] End of scheduler cycle, Clock: %d\n", scheduler->clock);
+        printf("[INFO] Fin del ciclo del scheduler, Clock: %d\n", scheduler->clock);
     }
 }
 
-// Function to write the output file
+// Función para escribir el archivo de salida
 void write_output(char *output_file, Process **processes, int process_count) {
     FILE *file = fopen(output_file, "w");
     if (file == NULL) {
-        printf("Error opening output file.\n");
+        printf("Error al abrir el archivo de salida.\n");
         return;
     }
 
-    // Write header
-    fprintf(file, "nombre_proceso,pid,interrupciones,turnaround,response,waiting,suma_deadline\n");
+    
 
-    // Write statistics for each process
+    // Escribir estadísticas de cada proceso
     for (int i = 0; i < process_count; ++i) {
         Process *p = processes[i];
         fprintf(file, "%s,%d,%d,%d,%d,%d,%d\n", 
@@ -217,7 +214,7 @@ void write_output(char *output_file, Process **processes, int process_count) {
 
 int main(int argc, char const *argv[]) {
     if (argc < 4) {
-        printf("Usage: ./lrscheduler <input_file> <output_file> <q>\n");
+        printf("Uso: ./lrscheduler <input_file> <output_file> <q>\n");
         return 1;
     }
 
@@ -225,28 +222,31 @@ int main(int argc, char const *argv[]) {
     char *output_file = (char *)argv[2];
     int q = atoi(argv[3]);
 
-    // Read input file
+    // Leer archivo de entrada
     InputFile *input_data = read_file(input_file);
-    printf("File name: %s\n", input_file);
-    printf("Number of processes: %d\n", input_data->len);
+    printf("Nombre archivo: %s\n", input_file);
+    printf("Cantidad de procesos: %d\n", input_data->len);
 
     Process **processes = (Process **)malloc(input_data->len * sizeof(Process *));
     Scheduler *scheduler = create_scheduler(input_data->len, input_data->len);
+
 
     for (int i = 0; i < input_data->len; ++i) {
         char* line = input_data->lines[i];
         char name[10];
         int pid, arrival_time, burst_time, bursts, io_wait, deadline;
 
-        // Use sscanf to extract values from the line
+        // Usar sscanf para extraer los valores de la línea
         sscanf(line, "%s %d %d %d %d %d %d", name, &pid, &arrival_time, &burst_time, &bursts, &io_wait, &deadline);
 
-        // Create a process with the extracted values
+        // Crear un proceso con los valores extraídos
         Process* process = create_process(name, pid, arrival_time, burst_time, bursts, io_wait, deadline);
-        processes[i] = process;  // Store the process in the array of processes
+        processes[i] = process;  // Guardar el proceso en el arreglo de procesos
+        enqueue(scheduler->high_priority_queue, process);
     }
 
-    // Run the scheduling simulation
+    
+
     schedule(scheduler, q, processes, input_data->len);
     write_output(output_file, processes, input_data->len);
 
